@@ -1,0 +1,220 @@
+# Tracking Server - S2S Attribution for XM Partners
+
+## Overview
+This is a production-ready Node.js tracking server that handles:
+- Click ID registration from landing pages
+- Telegram user mapping
+- XM Partner postback conversions
+- Real-time dashboard data
+
+## Installation
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Configure Environment
+Copy `.env` file and update with your values:
+```bash
+cp .env.example .env
+```
+
+Update these values:
+- `TELEGRAM_BOT_TOKEN` — from @BotFather
+- `TELEGRAM_CHANNEL_ID` — your channel ID
+- `META_PIXEL_ID` — your Meta pixel (if using CAPI)
+- `META_CAPI_TOKEN` — your Meta CAPI token
+
+### 3. Start Server
+```bash
+npm start
+```
+
+Server will start on `http://localhost:3000` and automatically:
+- Create `tracking.db` SQLite database
+- Create all required tables (clicks, conversions, telegram_users, etc.)
+- Log initialization status
+
+## API Endpoints
+
+### Health Check
+```
+GET /
+Response: { "status": "ok", "database": "connected" }
+```
+
+### Register Click (from Landing Page)
+```
+POST /api/click
+Body: {
+  "click_id": "abc12345",
+  "fbclid": "IwAR2...",
+  "fbp": "fb.1...",
+  "utm_source": "facebook",
+  "utm_campaign": "campaign_1"
+}
+Response: { "status": "ok", "click_id": "abc12345" }
+```
+
+### Map Telegram User
+```
+POST /api/telegram-map
+Body: {
+  "telegram_id": "123456789",
+  "click_id": "abc12345",
+  "telegram_username": "@username"
+}
+Response: { "status": "ok", "message": "Telegram user mapped" }
+```
+
+### XM Postback (Conversion)
+```
+GET /postback?click_id={tag}&amount={deposit_amount}&event={status}
+Response: OK (HTTP 200)
+```
+
+### Test Postback
+```
+GET /test-postback?click_id=TEST123&amount=500&event=FTD
+Response: { "click_id_found": true, "conversions_count": 1, "status": "test_ok" }
+```
+
+### Dashboard Data
+```
+GET /dashboard-data
+Response: { "summary": {...}, "conversions": [...] }
+```
+
+### Debug Logs
+```
+GET /logs
+Response: { "logs": [...] }
+```
+
+### Statistics
+```
+GET /stats
+Response: { "clicks": 100, "conversions": 25, ... }
+```
+
+## Database
+
+The database is automatically created with these tables:
+
+- **clicks** — User clicks from landing page (fbclid, UTMs, etc.)
+- **telegram_users** — Maps Telegram ID to click ID
+- **conversions** — XM deposit events
+- **postback_logs** — Audit trail of all postbacks
+- **meta_capi_events** — Future Meta CAPI integration
+
+## Testing Workflow
+
+### 1. Test Server is Running
+```bash
+curl http://localhost:3000/
+# Should return: { "status": "ok", ... }
+```
+
+### 2. Register a Click
+```bash
+curl -X POST http://localhost:3000/api/click \
+  -H "Content-Type: application/json" \
+  -d '{
+    "click_id": "test_123",
+    "fbclid": "test_fbclid",
+    "utm_source": "facebook"
+  }'
+```
+
+### 3. Test Postback
+```bash
+curl "http://localhost:3000/test-postback?click_id=test_123&amount=500&event=FTD"
+```
+
+### 4. View Dashboard Data
+```bash
+curl http://localhost:3000/dashboard-data
+```
+
+### 5. View Logs
+```bash
+curl http://localhost:3000/logs
+```
+
+## Deployment to Hostinger
+
+1. Push code to GitHub repository
+2. In Hostinger Node.js section:
+   - Connect GitHub repo
+   - Set startup file: `server.js`
+   - Set domain: `track.app.dilpreetbrar.com`
+   - Deploy
+
+3. After deployment, set environment variables in Hostinger:
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_CHANNEL_ID`
+   - Other `.env` variables
+
+4. Restart application
+
+## Troubleshooting
+
+### "better-sqlite3" build error
+Solution: Ensure Node.js version is 18+ and build tools are available
+```bash
+npm install --build-from-source
+```
+
+### Database locked error
+- Usually temporary
+- Server will auto-retry
+- Can safely restart
+
+### CORS errors
+Add your domain to `CORS_ORIGINS` in `.env`
+
+### Click not found on postback
+1. Verify click was registered (check `/dashboard-data`)
+2. Check exact click_id spelling
+3. View `/logs` for postback audit trail
+
+## Production Checklist
+
+- [ ] `.env` file configured with real values
+- [ ] `.env` file NOT committed to GitHub
+- [ ] `package.json` dependencies installed
+- [ ] Server tested locally: `npm start`
+- [ ] All endpoints tested with curl/Postman
+- [ ] Deployed to Hostinger
+- [ ] Domain verified: `https://track.app.dilpreetbrar.com/`
+- [ ] XM postback URL configured
+- [ ] Telegram bot added as admin to channel
+- [ ] Landing page script updated with correct API URL
+
+## Architecture
+
+```
+Landing Page (fbclid, UTMs) 
+    ↓ POST /api/click
+    → Database: clicks table
+    ↓
+Telegram Bot (click_id)
+    ↓ POST /api/telegram-map
+    → Database: telegram_users table
+    ↓
+XM Partners (deposit)
+    ↓ GET /postback?click_id=X&amount=Y
+    → Database: conversions table
+    ↓
+Dashboard (read /dashboard-data)
+    → Analytics & ROI calculations
+```
+
+## Support
+
+For issues:
+1. Check `/logs` endpoint
+2. Check server console output
+3. Verify database file exists: `tracking.db`
+4. Ensure all dependencies installed: `npm install`
